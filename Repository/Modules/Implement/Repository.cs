@@ -50,5 +50,10 @@ namespace Repository.Modules.Implement
         {
             return _context.Set<T>().Count();
         }
+
+        public bool Any()
+        {
+            return _context.Set<T>().Any();
+        }
     }
 }

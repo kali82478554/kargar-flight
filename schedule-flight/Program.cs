@@ -36,9 +36,6 @@ namespace schedule_flight
 
         static void Main(string[] args)
         {
-            // Measure the time taken to execute the change detection algorithm
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
             Console.WriteLine("Hello, World!");
             var serviceCollection = new ServiceCollection();
             var injectSC = InjectServiceCollection(serviceCollection);
@@ -73,94 +70,157 @@ namespace schedule_flight
                 return;
             }
 
+            // seed data
+            SeedRoute(serviceProvider);
+            SeedFlights(serviceProvider);
+            SeedSubScriptions(serviceProvider);
+            // Measure the time taken to execute the change detection algorithm
+            Stopwatch stopwatch = Stopwatch.StartNew();
             // scope flights 
-            flightsCsv flight = ScopeFlights(serviceProvider, Convert.ToInt32(args[2]));
-
+            flights flight = ScopeFlights(serviceProvider, Convert.ToInt32(args[2]));
             // scope routes 
             routes route = ScopeRoute(serviceProvider, flight.route_id);
-
             // scope subscriptions
             List<subscriptions> subscriptions = ScopeSubScriptions(serviceProvider);
-
             SaveResultCSV(flight, route, subscriptions, args);
-
             stopwatch.Stop();
-
             // Display execution metrics
             Console.WriteLine($"Time taken to execute the change detection algorithm: {stopwatch.ElapsedMilliseconds} milliseconds");
         }
 
         static routes ScopeRoute(ServiceProvider serviceProvider, int routeId)
         {
-            // Path to the CSV file
-            string folderPath = Directory.GetCurrentDirectory();
-            string filePath = Path.Combine(folderPath + "//Files", "routes.csv");
-
-            routes route = new routes();
-            using (var scope = serviceProvider.CreateScope())
+            try
             {
-                // inject database and reposigory
-                // var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
-                // var repository = new Repository<routes>(dbContext);
-                using (var reader = new StreamReader(filePath))
-                using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                routes route = new routes();
+                using (var scope = serviceProvider.CreateScope())
                 {
-                    var records = csv.GetRecords<routes>().ToList();
-                    route = records.Where(q => q.route_id == routeId).FirstOrDefault();
+                    // inject database and reposigory
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<routes>(dbContext);
+                    route = repository.GetById(routeId);
                     if (route == null)
                     {
-                        Console.WriteLine("value not found route...");
+                        Console.WriteLine("data notfound ScopeRoute... ");
                     }
-                    // if you want to add in db
-                    //foreach (var record in records)
-                    //{
-                    //    //repository.Add(record);
-                    //}
                 }
+                return route;
             }
-            return route;
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in ScopeRoute... : " + ex.Message);
+                throw;
+            }
         }
 
-        static flightsCsv ScopeFlights(ServiceProvider serviceProvider, int flight_id)
+        static void SeedRoute(ServiceProvider serviceProvider)
         {
             try
             {
+                Console.WriteLine("SeedRoute start...");
+                // Path to the CSV file
+                //string folderPath = Directory.GetCurrentDirectory();
+                //string filePath = Path.Combine(folderPath + "//Files", "routes.csv");
+                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\routes.csv");
+                using (var scope = serviceProvider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<routes>(dbContext);
+                    var count = repository.GetCount();
+                    if (count < 1)
+                    {
+                        using (var reader = new StreamReader(filePath))
+                        using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                        {
+                            List<routes> records = csv.GetRecords<routes>().ToList();
+                            foreach (var record in records)
+                            {
+                                repository.Add(record);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("SeedRoute exist data...");                        
+                    }
+                }
+                Console.WriteLine("SeedRoute... Done");
+                Console.WriteLine("");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in SeedRoute... : " + ex.Message);
+                throw;
+            }
+        }
+
+        static flights ScopeFlights(ServiceProvider serviceProvider, int flight_id)
+        {
+            try
+            {
+                flights flights = new flights();
+                using (var scope = serviceProvider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<flights>(dbContext);
+                    flights = repository.GetById(flight_id);
+                    if (flights == null)
+                    {
+                        Console.WriteLine("data notfound ScopeFlights... ");                        
+                    }
+                }
+                return flights;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in ScopeFlights... : " + ex.Message);
+                throw;
+            }
+        }
+
+        static void SeedFlights(ServiceProvider serviceProvider)
+        {
+            try
+            {
+                Console.WriteLine("SeedFlights start...");
                 // Path to the CSV file
                 string folderPath = Directory.GetCurrentDirectory();
-                string filePath = Path.Combine(folderPath + "//Files", "flights.csv");
+                //string filePath = Path.Combine(folderPath + "//Files", "flights.csv");
+                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\flights.csv");
 
                 flightsCsv flightsCsv = new flightsCsv();
                 using (var scope = serviceProvider.CreateScope())
                 {
-                    // inject database and reposigory
-                    //var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
-                    //var repository = new Repository<flights>(dbContext);
-                    using (var reader = new StreamReader(filePath))
-                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<flights>(dbContext);
+                    var count = repository.GetCount();
+                    if (count < 1)
                     {
-                        List<flightsCsv> records = csv.GetRecords<flightsCsv>().ToList();
-                        flightsCsv = records.Where(q => q.flight_id == flight_id).FirstOrDefault();
-                        if (flightsCsv == null)
+                        using (var reader = new StreamReader(filePath))
+                        using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                         {
-                            Console.WriteLine("value not found flightsCsv...");
+                            List<flightsCsv> records = csv.GetRecords<flightsCsv>().ToList();
+                            foreach (var record in records)
+                            {
+                                flights item = new flights
+                                {
+                                    airline_id = record.airline_id,
+                                    flight_id = record.flight_id,
+                                    route_id = record.route_id,
+                                    arrival_time = record.arrival_time,
+                                    departure_time = record.departure_time,
+                                };
+                                repository.Add(item);
+                            }
                         }
-                        // if you want to add in db
-                        //foreach (var record in records)
-                        //{
-                        //    //flights item = new flights
-                        //    //{
-                        //    //    airline_id = record.airline_id,
-                        //    //    flight_id = record.flight_id,
-                        //    //    route_id = record.route_id,
-                        //    //    arrival_time = record.arrival_time,
-                        //    //    departure_time = record.departure_time,
-                        //    //};
-                        //    // repository.Add(item);
-                        //}
                     }
-
+                    else
+                    {
+                        Console.WriteLine("SeedFlights exist data...");                        
+                    }
                 }
-                return flightsCsv;
+                Console.WriteLine("SeedFlights... Done");
+                Console.WriteLine("");
             }
             catch (Exception ex)
             {
@@ -174,33 +234,13 @@ namespace schedule_flight
             try
             {
                 List<subscriptions> subscriptions = new List<subscriptions>();
-                // Path to the CSV file
-                string folderPath = Directory.GetCurrentDirectory();
-                string filePath = Path.Combine(folderPath + "//Files", "subscriptions.csv");
-
                 using (var scope = serviceProvider.CreateScope())
                 {
-                    // inject database and reposigory
-                    //var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
-                    //var repository = new Repository<subscriptions>(dbContext);
-
-                    // set count to check 
-                    //var count = repository.GetCount();
-                    //if (count < 1)
-                    //{
-                    using (var reader = new StreamReader(filePath))
-                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
-                    {
-                        subscriptions = csv.GetRecords<subscriptions>().ToList();
-                        return subscriptions;
-                        // if you want to add in db
-                        //foreach (var record in records)
-                        //{
-                        //    //repository.Add(record);
-                        //}
-                    }
-                    //}
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<subscriptions>(dbContext);
+                    subscriptions = repository.GetAll().ToList();
                 }
+                return subscriptions;
             }
             catch (Exception ex)
             {
@@ -209,7 +249,49 @@ namespace schedule_flight
             }
         }
 
-        static void SaveResultCSV(flightsCsv flightsCsv, routes routes, List<subscriptions> lstsubscriptions, string[] args)
+        static void SeedSubScriptions(ServiceProvider serviceProvider)
+        {
+            try
+            {
+                Console.WriteLine("SeedFlights start...");
+                // Path to the CSV file
+                string folderPath = Directory.GetCurrentDirectory();
+                //string filePath = Path.Combine(folderPath + "//Files", "subscriptions.csv");
+                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\subscriptions.csv");
+
+                using (var scope = serviceProvider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<subscriptions>(dbContext);
+                    var count = repository.GetCount();
+                    if (count < 1)
+                    {
+                        using (var reader = new StreamReader(filePath))
+                        using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                        {
+                            List<subscriptions> subscriptions = csv.GetRecords<subscriptions>().ToList();
+                            foreach (var record in subscriptions)
+                            {
+                                repository.Add(record);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("SeedSubScriptions exist data...");                        
+                    }
+                }
+                Console.WriteLine("SeedSubScriptions... Done");
+                Console.WriteLine("");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in ScopeSubScriptions... : " + ex.Message);
+                throw;
+            }
+        }
+
+        static void SaveResultCSV(flights flightsCsv, routes routes, List<subscriptions> lstsubscriptions, string[] args)
         {
             try
             {

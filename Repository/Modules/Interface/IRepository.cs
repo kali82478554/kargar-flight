@@ -14,5 +14,6 @@ namespace Repository.Modules.Interface
         T GetById(int id);
         IEnumerable<T> GetAll();
         int GetCount();
+        bool Any();
     }
 }
