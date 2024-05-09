@@ -13,6 +13,8 @@ namespace Repository.Modules.Interface
         void Update(T entity);
         T GetById(int id);
         IEnumerable<T> GetAll();
+        IQueryable<T> GetAllQueryable();
+        IQueryable<T> Get(Func<T, bool> filter = null);
         int GetCount();
         bool Any();
     }

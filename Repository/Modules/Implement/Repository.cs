@@ -46,6 +46,21 @@ namespace Repository.Modules.Implement
             return _context.Set<T>().ToList();
         }
 
+        public IEnumerable<T> GetAllAsNoTracking()
+        {
+            return _context.Set<T>().AsNoTracking().ToList();
+        }
+
+        public IQueryable<T> Get(Func<T, bool> filter = null)
+        {
+            return filter == null ? _context.Set<T>().AsQueryable() : _context.Set<T>().Where(filter).AsQueryable();
+        }
+
+        public IQueryable<T> GetAllQueryable()
+        {
+            return _context.Set<T>().AsQueryable();
+        }
+
         public int GetCount()
         {
             return _context.Set<T>().Count();

@@ -3,21 +3,32 @@ using Domain.Context;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Repository.Modules.Implement;
 using Repository.Modules.Interface;
 using System;
 using System.Diagnostics;
-using System.Formats.Asn1;
 using System.Globalization;
 
 namespace schedule_flight
 {
+    public class FlightsDto
+    {
+        public int FlightId { get; set; }
+        public int OriginCityId { get; set; }
+        public int DestinationCityId { get; set; }
+        public DateTime DepartureTime { get; set; }
+        public DateTime ArrivalTime { get; set; }
+        public int AirlineId { get; set; }
+        public string Status { get; set; }
+    }
+
     internal class Program
     {
         static ServiceCollection InjectServiceCollection(ServiceCollection serviceDescriptors)
         {
             var connection = @"Server=DESKTOP-JMMV2AR;Database=Schedule-flight;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
-            serviceDescriptors.AddDbContext<DataBaseContext>(options => options.UseSqlServer(connection));
+            serviceDescriptors.AddDbContext<DataBaseContext>(options => options.UseLazyLoadingProxies().UseSqlServer(connection));
             serviceDescriptors.AddScoped(typeof(IRepository<flights>), typeof(Repository<flights>));
             serviceDescriptors.AddScoped(typeof(IRepository<routes>), typeof(Repository<routes>));
             serviceDescriptors.AddScoped(typeof(IRepository<subscriptions>), typeof(Repository<subscriptions>));
@@ -34,6 +45,7 @@ namespace schedule_flight
             Console.WriteLine("CreateDataBase... Done");
         }
 
+        // dotnet run "2016-11-05" "2016-11-10" "10"
         static void Main(string[] args)
         {
             Console.WriteLine("Hello, World!");
@@ -64,7 +76,7 @@ namespace schedule_flight
                 return;
             }
 
-            if (!int.TryParse(args[2], out int agencyId))
+            if (!int.TryParse(args[2], out int airlineId))
             {
                 Console.WriteLine("Invalid agency ID. Please enter a valid integer.");
                 return;
@@ -77,12 +89,13 @@ namespace schedule_flight
             // Measure the time taken to execute the change detection algorithm
             Stopwatch stopwatch = Stopwatch.StartNew();
             // scope flights 
-            flights flight = ScopeFlights(serviceProvider, Convert.ToInt32(args[2]));
+            //flights flight = ScopeFlights(serviceProvider, Convert.ToInt32(args[2]));
             // scope routes 
-            routes route = ScopeRoute(serviceProvider, flight.route_id);
+            //routes route = ScopeRoute(serviceProvider, flight.route_id);
             // scope subscriptions
-            List<subscriptions> subscriptions = ScopeSubScriptions(serviceProvider);
-            SaveResultCSV(flight, route, subscriptions, args);
+            //List<subscriptions> subscriptions = ScopeSubScriptions(serviceProvider);
+            SaveResultCSV(serviceProvider, startDate, endDate, airlineId);
+            //SaveResultCSV(serviceProvider, DateTime.Parse("2016-10-11"), DateTime.Parse("2016-10-5") , 10);
             stopwatch.Stop();
             // Display execution metrics
             Console.WriteLine($"Time taken to execute the change detection algorithm: {stopwatch.ElapsedMilliseconds} milliseconds");
@@ -119,9 +132,9 @@ namespace schedule_flight
             {
                 Console.WriteLine("SeedRoute start...");
                 // Path to the CSV file
-                //string folderPath = Directory.GetCurrentDirectory();
-                //string filePath = Path.Combine(folderPath + "//Files", "routes.csv");
-                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\routes.csv");
+                string folderPath = Directory.GetCurrentDirectory();
+                string filePath = Path.Combine(folderPath + "//Files", "routes.csv");
+                //string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\routes.csv");
                 using (var scope = serviceProvider.CreateScope())
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
@@ -141,7 +154,7 @@ namespace schedule_flight
                     }
                     else
                     {
-                        Console.WriteLine("SeedRoute exist data...");                        
+                        Console.WriteLine("SeedRoute exist data...");
                     }
                 }
                 Console.WriteLine("SeedRoute... Done");
@@ -154,20 +167,171 @@ namespace schedule_flight
             }
         }
 
-        static flights ScopeFlights(ServiceProvider serviceProvider, int flight_id)
+        static List<FlightsDto> ScopeNewFlights(ServiceProvider serviceProvider, DateTime newFlightStartDate, DateTime newFlightEndDate, int airlineId)
         {
             try
             {
-                flights flights = new flights();
+                List<FlightsDto> flights = new List<FlightsDto>();
                 using (var scope = serviceProvider.CreateScope())
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
                     var repository = new Repository<flights>(dbContext);
-                    flights = repository.GetById(flight_id);
-                    if (flights == null)
-                    {
-                        Console.WriteLine("data notfound ScopeFlights... ");                        
-                    }
+
+                    //var queryflights = repository.GetAll();
+                    //flights = queryflights
+                    //    .Where(f => f.departure_time >= newFlightStartDate && f.departure_time <= newFlightEndDate && f.airline_id == airlineId &&
+                    //            !dbContext.Flights.Any(df =>
+                    //                df.departure_time >= f.departure_time.Subtract(TimeSpan.FromDays(7)) - TimeSpan.FromMinutes(30) &&
+                    //                df.departure_time <= f.departure_time.Subtract(TimeSpan.FromDays(7)) + TimeSpan.FromMinutes(30) &&
+                    //                df.airline_id == airlineId))
+                    //    .Select(f => new FlightsDto
+                    //    {
+                    //        FlightId = f.flight_id,
+                    //        OriginCityId = f.Routes.origin_city_id,
+                    //        DestinationCityId = f.Routes.destination_city_id,
+                    //        DepartureTime = f.departure_time,
+                    //        ArrivalTime = f.arrival_time,
+                    //        AirlineId = f.airline_id,
+                    //        Status = "New"
+                    //    })
+                    //.ToList();
+                    var tolerance = TimeSpan.FromMinutes(30);
+                    flights = repository
+                        .Get(filter: f =>
+                            f.departure_time >= newFlightStartDate &&
+                            f.departure_time <= newFlightEndDate &&
+                            f.airline_id == airlineId &&
+                            !repository.Get().Any(df =>
+                                df.departure_time >= f.departure_time.Subtract(TimeSpan.FromDays(7)) - tolerance &&
+                                df.departure_time <= f.departure_time.Subtract(TimeSpan.FromDays(7)) + tolerance &&
+                                df.airline_id == f.airline_id))
+                        .Select(f => new FlightsDto
+                        {
+                            FlightId = f.flight_id,
+                            OriginCityId = f.Routes.origin_city_id,
+                            DestinationCityId = f.Routes.destination_city_id,
+                            DepartureTime = f.departure_time,
+                            ArrivalTime = f.arrival_time,
+                            AirlineId = f.airline_id,
+                            Status = "New"
+                        })
+                        .ToList();
+                }
+                return flights;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in ScopeNewFlights... : " + ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// this take to long 
+        /// </summary>
+        /// <param name="serviceProvider"></param>
+        /// <param name="discontinuedFlightStartDate"></param>
+        /// <param name="discontinuedFlightEndDate"></param>
+        /// <param name="airlineId"></param>
+        /// <returns></returns>
+        static List<FlightsDto> ScopeDiscontinuedFlights_Long(ServiceProvider serviceProvider, DateTime discontinuedFlightStartDate, DateTime discontinuedFlightEndDate, int airlineId)
+        {
+            try
+            {
+                List<FlightsDto> flights = new List<FlightsDto>();
+                using (var scope = serviceProvider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    var repository = new Repository<flights>(dbContext);
+
+                    var tolerance = TimeSpan.FromMinutes(30);
+                    flights = repository.Get(filter: f =>
+                            f.departure_time >= discontinuedFlightStartDate &&
+                            f.departure_time <= discontinuedFlightEndDate &&
+                            f.airline_id == airlineId &&
+                            !repository.Get().Any(nf =>
+                                nf.departure_time >= f.departure_time.AddDays(7) - tolerance &&
+                                nf.departure_time <= f.departure_time.AddDays(7) + tolerance &&
+                                nf.airline_id == f.airline_id))
+                        .Select(f => new FlightsDto
+                        {
+                            FlightId = f.flight_id,
+                            OriginCityId = f.Routes.origin_city_id,
+                            DestinationCityId = f.Routes.destination_city_id,
+                            DepartureTime = f.departure_time,
+                            ArrivalTime = f.arrival_time,
+                            AirlineId = f.airline_id,
+                            Status = "Discontinued"
+                        })
+                        .ToList();
+                }
+                return flights;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("throw an exception in ScopeFlights... : " + ex.Message);
+                throw;
+            }
+        }
+
+        static List<FlightsDto> ScopeFlights
+            (ServiceProvider serviceProvider, DateTime newFlightStartDate, DateTime newFlightEndDate, DateTime discontinuedFlightStartDate, DateTime discontinuedFlightEndDate, int airlineId)
+        {
+            try
+            {
+                List<FlightsDto> flights = new List<FlightsDto>();
+                using (var scope = serviceProvider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DataBaseContext>();
+                    //var repository = new Repository<flights>(dbContext);
+
+                    var tolerance = TimeSpan.FromMinutes(30);
+                    var lst_flights = dbContext.Flights
+                                     .AsNoTracking() // Disable entity tracking
+                                     .Where(f => f.airline_id == airlineId && ((f.departure_time >= newFlightStartDate && f.departure_time <= newFlightEndDate) ||
+                                                  (f.departure_time >= discontinuedFlightStartDate && f.departure_time <= discontinuedFlightEndDate)))
+                                     .ToList();
+
+                    // Get new flights
+                    var newFlights = lst_flights
+                        .Where(f => f.departure_time >= newFlightStartDate && f.departure_time <= newFlightEndDate &&
+                            !lst_flights.Any(df =>
+                                df.departure_time >= f.departure_time.Subtract(TimeSpan.FromDays(7)) - tolerance &&
+                                df.departure_time <= f.departure_time.Subtract(TimeSpan.FromDays(7)) + tolerance &&
+                                df.airline_id == f.airline_id))
+                        .Select(f => new FlightsDto
+                        {
+                            FlightId = f.flight_id,
+                            OriginCityId = f.Routes.origin_city_id,
+                            DestinationCityId = f.Routes.destination_city_id,
+                            DepartureTime = f.departure_time,
+                            ArrivalTime = f.arrival_time,
+                            AirlineId = f.airline_id,
+                            Status = "New"
+                        })
+                        .ToList();
+
+                    // Get discontinued flights
+                    var discontinuedFlights = lst_flights
+                        .Where(f => f.departure_time >= discontinuedFlightStartDate && f.departure_time <= discontinuedFlightEndDate &&
+                            !lst_flights.Any(nf =>
+                                nf.departure_time >= f.departure_time.AddDays(7) - tolerance &&
+                                nf.departure_time <= f.departure_time.AddDays(7) + tolerance &&
+                                nf.airline_id == f.airline_id))
+                        .Select(f => new FlightsDto
+                        {
+                            FlightId = f.flight_id,
+                            OriginCityId = f.Routes.origin_city_id,
+                            DestinationCityId = f.Routes.destination_city_id,
+                            DepartureTime = f.departure_time,
+                            ArrivalTime = f.arrival_time,
+                            AirlineId = f.airline_id,
+                            Status = "Discontinued"
+                        })
+                        .ToList();
+
+                    // Combine new and discontinued flights
+                    flights = newFlights.Concat(discontinuedFlights).ToList();
                 }
                 return flights;
             }
@@ -185,8 +349,8 @@ namespace schedule_flight
                 Console.WriteLine("SeedFlights start...");
                 // Path to the CSV file
                 string folderPath = Directory.GetCurrentDirectory();
-                //string filePath = Path.Combine(folderPath + "//Files", "flights.csv");
-                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\flights.csv");
+                string filePath = Path.Combine(folderPath + "//Files", "flights.csv");
+                //string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\flights.csv");
 
                 flightsCsv flightsCsv = new flightsCsv();
                 using (var scope = serviceProvider.CreateScope())
@@ -216,7 +380,7 @@ namespace schedule_flight
                     }
                     else
                     {
-                        Console.WriteLine("SeedFlights exist data...");                        
+                        Console.WriteLine("SeedFlights exist data...");
                     }
                 }
                 Console.WriteLine("SeedFlights... Done");
@@ -256,8 +420,8 @@ namespace schedule_flight
                 Console.WriteLine("SeedFlights start...");
                 // Path to the CSV file
                 string folderPath = Directory.GetCurrentDirectory();
-                //string filePath = Path.Combine(folderPath + "//Files", "subscriptions.csv");
-                string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\subscriptions.csv");
+                string filePath = Path.Combine(folderPath + "//Files", "subscriptions.csv");
+                //string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\subscriptions.csv");
 
                 using (var scope = serviceProvider.CreateScope())
                 {
@@ -278,7 +442,7 @@ namespace schedule_flight
                     }
                     else
                     {
-                        Console.WriteLine("SeedSubScriptions exist data...");                        
+                        Console.WriteLine("SeedSubScriptions exist data...");
                     }
                 }
                 Console.WriteLine("SeedSubScriptions... Done");
@@ -291,7 +455,7 @@ namespace schedule_flight
             }
         }
 
-        static void SaveResultCSV(flights flightsCsv, routes routes, List<subscriptions> lstsubscriptions, string[] args)
+        static void SaveResultCSV(ServiceProvider serviceProvider, DateTime startDate, DateTime endDate, int airlineId)
         {
             try
             {
@@ -299,6 +463,7 @@ namespace schedule_flight
                 string folderPath = Directory.GetCurrentDirectory();
                 // Path to the CSV file
                 string filePath = Path.Combine(folderPath + "//Files", "results.csv");
+                //string filePath = Path.Combine("C:\\Users\\kali\\Downloads\\Compressed\\backend-files\\results.csv");
 
                 // Write data to CSV file
                 if (!File.Exists(filePath))
@@ -310,25 +475,25 @@ namespace schedule_flight
                     }
                 }
 
-                var startDate = DateTime.Parse(args[0]);
-                var endDate = DateTime.Parse(args[1]);
                 // Append data to CSV file
                 using (StreamWriter writer = new StreamWriter(filePath, true))
                 {
-                    // Write data
-                    var ori_city_id = routes.origin_city_id;
-                    var dest_city_id = routes.destination_city_id;
-                    var dep_time = flightsCsv.departure_time;
-                    var ar_time = flightsCsv.arrival_time;
-                    var airline_id = flightsCsv.airline_id;
-                    var status = "New";
-                    if (lstsubscriptions.Any(q => q.origin_city_id == routes.origin_city_id && q.destination_city_id == routes.destination_city_id))
+                    // Calculate the date range for new and discontinued flights
+                    var newFlightStartDate = startDate.AddDays(-7);
+                    var newFlightEndDate = endDate;
+                    //var scopeNewFlights = ScopeNewFlights(serviceProvider, newFlightStartDate, newFlightEndDate, airlineId);
+
+                    var discontinuedFlightStartDate = startDate;
+                    var discontinuedFlightEndDate = endDate.AddDays(7);
+                    //var scopeDiscontinuedFlights = ScopeDiscontinuedFlights(serviceProvider, discontinuedFlightStartDate, discontinuedFlightEndDate, airlineId);
+                    var scopeFlights = ScopeFlights(serviceProvider, newFlightStartDate, newFlightEndDate, discontinuedFlightStartDate, discontinuedFlightEndDate, airlineId);
+
+                    // Combine new and discontinued flights                    
+                    foreach (var item in scopeFlights)
                     {
-                        if (startDate.Date <= routes.departure_date && endDate.Date >= routes.departure_date)
-                            status = "Discontinued";
+                        writer.WriteLine($"{item.OriginCityId}, {item.DestinationCityId}, {item.DepartureTime}, {item.ArrivalTime}, {item.AirlineId}, {item.Status}");
                     }
 
-                    writer.WriteLine($"{ori_city_id}, {dest_city_id}, {dep_time}, {ar_time}, {airline_id}, {status}");
                     Console.WriteLine($"Data appended to CSV file successfully! File SaveResultCSV");
                 }
 
